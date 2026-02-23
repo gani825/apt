@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.apt.aptmanagement.application.user.UserMapper">
+
+    <!-- 회원 등록 (일반 회원가입) -->
+    <insert id="signUp" useGeneratedKeys="true" keyProperty="userId"
+            parameterType="com.apt.aptmanagement.application.user.model.UserSignUpReq">
+        INSERT INTO user (household_id, email, password, name, phone, role, status, created_at)
+        VALUES (#{householdId}, #{email}, #{password}, #{name}, #{phone}, 'RESIDENT', 'PENDING', NOW())
+    </insert>
+
+    <!-- 소셜 로그인 신규 사용자 등록 (password NOT NULL이므로 랜덤 비밀번호 포함) -->
+    <insert id="signUpOAuth" useGeneratedKeys="true" keyProperty="userId"
+            parameterType="com.apt.aptmanagement.application.user.model.User">
+        INSERT INTO user (email, password, name, role, status, provider, provider_id, created_at)
+        VALUES (#{email}, #{password}, #{name}, #{role}, #{status}, #{provider}, #{providerId}, NOW())
+    </insert>
+
+    <!-- 이메일로 사용자 조회 (로그인, 중복 체크) -->
+    <select id="findByEmail" resultType="com.apt.aptmanagement.application.user.model.User">
+        SELECT user_id, household_id, email, password, name, phone,
+               role, status, approved_by, approved_at,
+               provider, provider_id, created_at, updated_at
+        FROM user
+        WHERE email = #{email}
+    </select>
+
+    <!-- userId로 사용자 조회 (마이페이지) -->
+    <select id="findById" resultType="com.apt.aptmanagement.application.user.model.UserGetMeRes">
+        SELECT u.user_id, u.email, u.name, u.phone, u.role, u.status,
+               u.household_id, h.dong, h.ho, u.provider
+        FROM user u
+        LEFT JOIN household h ON u.household_id = h.household_id
+        WHERE u.user_id = #{userId}
+    </select>
+
+    <!-- 소셜 제공자 + 제공자 ID로 사용자 조회 (소셜 로그인 기존 계정 확인) -->
+    <select id="findByProviderAndProviderId" resultType="com.apt.aptmanagement.application.user.model.User">
+        SELECT user_id, household_id, email, name, role, status,
+               provider, provider_id, created_at
+        FROM user
+        WHERE provider = #{provider}
+          AND provider_id = #{providerId}
+    </select>
+
+    <!-- RT 저장 -->
+    <insert id="saveRefreshToken"
+            parameterType="com.apt.aptmanagement.application.user.model.AuthToken">
+        INSERT INTO refresh_token (user_id, refresh_token, expired_at, created_at)
+        VALUES (#{userId}, #{refreshToken}, #{expiredAt}, NOW())
+    </insert>
+
+    <!-- userId로 RT 조회 (토큰 재발급 검증) -->
+    <select id="findRefreshTokenByUserId" resultType="com.apt.aptmanagement.application.user.model.AuthToken">
+        SELECT token_id, user_id, refresh_token, expired_at, created_at
+        FROM refresh_token
+        WHERE user_id = #{userId}
+        ORDER BY created_at DESC
+        LIMIT 1
+    </select>
+
+    <!-- userId로 RT 삭제 (로그아웃, 재로그인 시 기존 RT 제거) -->
+    <delete id="deleteRefreshTokenByUserId">
+        DELETE FROM refresh_token WHERE user_id = #{userId}
+    </delete>
+
+    <!-- RT 문자열로 RT 조회 (탈취 감지용) -->
+    <select id="findByRefreshToken" resultType="com.apt.aptmanagement.application.user.model.AuthToken">
+        SELECT token_id, user_id, refresh_token, expired_at, created_at
+        FROM refresh_token
+        WHERE refresh_token = #{refreshToken}
+    </select>
+
+</mapper>
